@@ -5,12 +5,13 @@ clear;
 %% Animation
 amp = 10; % amplitude of sine wave 
 path_length = 10; % length of path 
+plot_height = 2;
 x = linspace(1,path_length); 
 % generate path
 path_fn = @(x)amp*sin(x); % function to create path
 path = path_fn(x); % path for robot ee to follow
 tframe = 0.15; % how long to wait before updating frame 
-screen_width = 15; % width of plot
+screen_width = 2; % width of plot
 %initialize hold variables
 x_c = -10; y_c = 0; x_do = 0; y_do = 0; x_o=0; y_o=0; 
 % Initialize robot
@@ -18,12 +19,42 @@ link_lengths = [1; 1];
 link_masses = [0; 0];
 joint_masses = [0; 0];
 ee_mass = 0;
-robot = Robot(link_lengths, link_masses, joint_masses, ee_mass);
+robot = RobotFramework(link_lengths, link_masses, joint_masses, ee_mass);
 
-for i = 1:(length(x)-screen_width) % loop through path  
+%% Create EE Path
+figure;
+hold on
+% plot circle to indicate reach limits of robot arm
+radius = link_lengths(1)+link_lengths(2);
+theta = 0:pi/50:2*pi;
+xunit = radius * cos(theta);
+yunit = radius * sin(theta);
+plot(xunit, yunit);
+% Create axis limits on plot
+xlim([-screen_width, screen_width]);
+ylim([0, plot_height]);
+[x_positions,y_positions] = ginput; % grab points from figure
+hold off
+x_trajectory = x_positions(1):.25:x_positions(end); 
+y_trajectory = spline(x_positions, y_positions, x_trajectory); % create smooth curve
+%% Prepare Simulation Plot
+x_goal = x_trajectory(1); % x goal position
+y_goal = y_trajectory(1); % y goal position
+% Create initial plot 
+figure;
+xlim([-screen_width, screen_width]);
+ylim([-plot_height, plot_height]);
+path_plot = plot(x_goal, y_goal, 'o');
+visualizer = FeedbackRobotVisualizer2D(4, 0.1, 0.1, false);
+title('RR Robot');
+
+%% Iterativelty Visualize Data 
+for i = 2:length(x_trajectory) % loop through path      
+%for i = 1:1  
+    %----------------------System Inputs----------------------------------%
     % get robot ee position
-    x_goal = path(i+floor(screen_width/2)); % x goal position
-    y_goal = x(i+floor(screen_width/2)); % y goal position
+    x_goal = x_trajectory(i); % x goal position
+    y_goal = y_trajectory(i); % y goal position
     goal_pos = [x_goal; y_goal]; %goal position vector
     pos_c = [x_c; y_c]; %Current position vector
     % Get Robot and path velocities
@@ -33,19 +64,25 @@ for i = 1:(length(x)-screen_width) % loop through path
     v_x = abs(x_c - x_o)/tframe;
     v_y = abs(y_c - y_o)/tframe;
     v_c = [v_x; v_y]; %Current velocity vector
-    [x_actual, y_actual] = Controller(goal_pos, pos_c, v_g, v_c);
-    plot(path(i:i+screen_width), x(i:i+screen_width), ...
-        x_goal, y_goal, 'o', x_actual, y_actual, 'o');
-    grid on
-    x_axis_buffer = 5; % how much further to push out pos/neg x limits
-    xlim([-amp-x_axis_buffer, amp+x_axis_buffer]);    
-    pause(tframe); 
+    [x_actual, y_actual] = Controller(goal_pos, pos_c, v_g, v_c);    
     x_o = x_c; y_o = y_c; %old ee position
     x_c = x_actual; y_c = y_actual; %current ee position
     x_do = x_goal; y_do = y_goal; %current goal position
     
-    %----------------Transfer position info to robot--------------------%
-    %thetas = robot.inverse_kinematics([0; pi/4], [x_actual; y_actual]);
+    %----------------Transfer position info to robot----------------------%
+    thetas = robot.inverse_kinematics([0; pi/4], [x_actual; y_actual]);
+    %---------------------------Start Plot--------------------------------%
+    % Create Robot Frames 
+    frames = zeros(3,3,4);
+    frames(:,:,1) = eye(3);
+    frames(:,:,2:end) = robot.fk(thetas);
+    % update drawings
+    visualizer.setFrames(frames);    
+    set(path_plot,'XData',x_goal);
+    set(path_plot,'YData',y_goal);
+    drawnow;           
+    pause(tframe); 
+    %----------------------------End Plot---------------------------------%
 end
 %% Controls Code Section 
 %-------------------------EDIT CONTROLS CODE HERE-------------------------%
@@ -69,3 +106,4 @@ function [x,y] = Controller(goal_pos, pos_c, v_g, v_c)
     y = y + (kp*e_y + kd*e_vy); %New value y
 end
 %-------------------------END OF CONTROLS CODE----------------------------%
+%}
