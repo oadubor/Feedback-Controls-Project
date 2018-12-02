@@ -3,7 +3,7 @@ clc;
 close all;
 clear;
 %% Animation
-amp = 10; % amplitude of sine wave 
+amp = 1; % amplitude of sine wave 
 path_length = 10; % length of path 
 x = linspace(1,path_length); 
 % generate path
@@ -12,13 +12,16 @@ path = path_fn(x); % path for robot ee to follow
 tframe = 0.15; % how long to wait before updating frame 
 screen_width = 15; % width of plot
 %initialize hold variables
-x_c = -10; y_c = 0; x_do = 0; y_do = 0; x_o=0; y_o=0; 
+x_c = 2; y_c = 0; x_do = 0; y_do = 0; x_o=0; y_o=0; 
 % Initialize robot
 link_lengths = [1; 1];
 link_masses = [0; 0];
 joint_masses = [0; 0];
 ee_mass = 0;
 robot = Robot(link_lengths, link_masses, joint_masses, ee_mass);
+%Initialize Thetas
+theta_arr = zeros(2, length(x)-screen_width);
+thetas = [0; 0];
 
 for i = 1:(length(x)-screen_width) % loop through path  
     % get robot ee position
@@ -37,7 +40,7 @@ for i = 1:(length(x)-screen_width) % loop through path
     plot(path(i:i+screen_width), x(i:i+screen_width), ...
         x_goal, y_goal, 'o', x_actual, y_actual, 'o');
     grid on
-    x_axis_buffer = 5; % how much further to push out pos/neg x limits
+    x_axis_buffer = 1; % how much further to push out pos/neg x limits
     xlim([-amp-x_axis_buffer, amp+x_axis_buffer]);    
     pause(tframe); 
     x_o = x_c; y_o = y_c; %old ee position
@@ -45,7 +48,9 @@ for i = 1:(length(x)-screen_width) % loop through path
     x_do = x_goal; y_do = y_goal; %current goal position
     
     %----------------Transfer position info to robot--------------------%
-    %thetas = robot.inverse_kinematics([0; pi/4], [x_actual; y_actual]);
+    thetas_old = thetas; %Previous theta to use in IK
+    thetas = robot.ik(thetas_old, [x_actual; y_actual - x(i)]);
+    theta_arr(:,i) = thetas; %Array of all the joint angles in the path
 end
 %% Controls Code Section 
 %-------------------------EDIT CONTROLS CODE HERE-------------------------%
